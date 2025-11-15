@@ -38,10 +38,23 @@ func main() {
 	case "park":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "Error: project name required")
-			fmt.Fprintln(os.Stderr, "Usage: parkr park <project>")
+			fmt.Fprintln(os.Stderr, "Usage: parkr park <project> [--no-hash]")
 			os.Exit(2)
 		}
-		err = cli.ParkCmd(os.Args[2])
+		projectName := os.Args[2]
+		noHash := false
+
+		for i := 3; i < len(os.Args); i++ {
+			switch os.Args[i] {
+			case "--no-hash":
+				noHash = true
+			default:
+				fmt.Fprintf(os.Stderr, "Error: unknown option '%s'\n", os.Args[i])
+				os.Exit(2)
+			}
+		}
+
+		err = cli.ParkCmd(projectName, noHash)
 
 	case "rm":
 		if len(os.Args) < 3 {
@@ -92,6 +105,7 @@ func printUsage() {
 	fmt.Println("  list [category]   List all projects in archive")
 	fmt.Println("  grab <project>    Copy project from archive to local")
 	fmt.Println("  park <project>    Sync local changes back to archive")
+	fmt.Println("                    Options: --no-hash")
 	fmt.Println("  rm <project>      Remove local copy (keeps archive)")
 	fmt.Println("                    Options: --no-hash, --force")
 	fmt.Println("  help              Show this help message")

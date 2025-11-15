@@ -52,14 +52,14 @@ parkr rm test-project --no-hash
 ## Phase 2: Safety Verification
 Add hash-based verification for safe deletion.
 
-- [ ] Implement SHA256 content hashing (sorted file walk)
-- [ ] Track `archive_content_hash`, `local_content_hash`
-- [ ] Track `local_hash_computed_at`, `last_park_mtime`
-- [ ] Implement `no_hash_mode` flag logic
-- [ ] `parkr park --no-hash` option
-- [ ] `parkr rm` with hash verification (default)
-- [ ] `parkr rm --force` option
-- [ ] Dirty detection (mtime vs hash computed time)
+- [x] Implement SHA256 content hashing (sorted file walk)
+- [x] Track `archive_content_hash`, `local_content_hash`
+- [x] Track `local_hash_computed_at`, `last_park_mtime`
+- [x] Implement `no_hash_mode` flag logic
+- [x] `parkr park --no-hash` option
+- [x] `parkr rm` with hash verification (default)
+- [x] `parkr rm --force` option
+- [x] Dirty detection (mtime vs hash computed time)
 
 ---
 
