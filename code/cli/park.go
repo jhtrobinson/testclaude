@@ -9,7 +9,7 @@ import (
 )
 
 // ParkCmd syncs local changes back to archive
-func ParkCmd(projectName string) error {
+func ParkCmd(projectName string, noHash bool) error {
 	sm := core.NewStateManager()
 	state, err := sm.Load()
 	if err != nil {
@@ -60,8 +60,36 @@ func ParkCmd(projectName string) error {
 		project.LastParkMtime = &mtime
 	}
 
-	// For Phase 1, we're in no-hash mode
-	project.NoHashMode = true
+	if noHash {
+		// No hash mode - only track mtime
+		project.NoHashMode = true
+		fmt.Println("Skipping hash computation (--no-hash)")
+	} else {
+		// Compute hashes for both local and archive
+		fmt.Println("Computing project hash...")
+
+		localHash, err := core.ComputeProjectHash(project.LocalPath)
+		if err != nil {
+			return fmt.Errorf("failed to compute local hash: %w", err)
+		}
+
+		archiveHash, err := core.ComputeProjectHash(archivePath)
+		if err != nil {
+			return fmt.Errorf("failed to compute archive hash: %w", err)
+		}
+
+		// After successful rsync, both should match
+		if localHash != archiveHash {
+			return fmt.Errorf("hash mismatch after sync - this should not happen")
+		}
+
+		project.LocalContentHash = &localHash
+		project.ArchiveContentHash = &archiveHash
+		project.LocalHashComputedAt = &now
+		project.NoHashMode = false
+
+		fmt.Printf("Hash computed: %s\n", localHash[:16]+"...")
+	}
 
 	if err := sm.Save(state); err != nil {
 		return fmt.Errorf("failed to update state: %w", err)
