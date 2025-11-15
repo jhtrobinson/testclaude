@@ -18,7 +18,24 @@ func main() {
 
 	switch command {
 	case "init":
-		err = cli.InitCmd()
+		archiveRoot := ""
+		if len(os.Args) > 2 {
+			archiveRoot = os.Args[2]
+		}
+		err = cli.InitCmd(archiveRoot)
+
+	case "add":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Error: local path required")
+			fmt.Fprintln(os.Stderr, "Usage: parkr add <local-path> [category]")
+			os.Exit(2)
+		}
+		localPath := os.Args[2]
+		category := ""
+		if len(os.Args) > 3 {
+			category = os.Args[3]
+		}
+		err = cli.AddCmd(localPath, category)
 
 	case "list", "ls":
 		category := ""
@@ -88,7 +105,8 @@ func printUsage() {
 	fmt.Println("Usage: parkr <command> [arguments]")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  init              Initialize parkr state file")
+	fmt.Println("  init [path]       Initialize parkr (path, $PARKR_ARCHIVE_ROOT, or prompt)")
+	fmt.Println("  add <path> [cat]  Add local project to archive")
 	fmt.Println("  list [category]   List all projects in archive")
 	fmt.Println("  grab <project>    Copy project from archive to local")
 	fmt.Println("  park <project>    Sync local changes back to archive")

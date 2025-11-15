@@ -69,6 +69,13 @@ func RmCmd(projectName string, noHash bool, force bool) error {
 	}
 
 	// Delete local copy
+	if os.Getenv("PARKR_ALIVE") == "" {
+		// Mock mode - just print the command
+		fmt.Printf("rm -rf %s\n", project.LocalPath)
+		fmt.Println("(mock mode - set PARKR_ALIVE=1 to actually delete)")
+		return nil
+	}
+
 	fmt.Printf("Removing local copy at %s...\n", project.LocalPath)
 	if err := os.RemoveAll(project.LocalPath); err != nil {
 		return fmt.Errorf("failed to remove local copy: %w", err)

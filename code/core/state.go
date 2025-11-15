@@ -109,13 +109,18 @@ func (sm *StateManager) Exists() bool {
 
 // CreateDefault creates a new state file with default configuration
 func (sm *StateManager) CreateDefault() error {
+	return sm.CreateWithRoot("/tmp/parkr-archive")
+}
+
+// CreateWithRoot creates a new state file with the given archive root
+func (sm *StateManager) CreateWithRoot(archiveRoot string) error {
 	state := &State{
 		Masters: map[string]map[string]string{
 			"primary": {
-				"code":    "/Volumes/Extra/project-archive/code",
-				"pycharm": "/Volumes/Extra/project-archive/pycharm",
-				"rstudio": "/Volumes/Extra/project-archive/rstudio",
-				"misc":    "/Volumes/Extra/project-archive/misc",
+				"code":    filepath.Join(archiveRoot, "code"),
+				"pycharm": filepath.Join(archiveRoot, "pycharm"),
+				"rstudio": filepath.Join(archiveRoot, "rstudio"),
+				"misc":    filepath.Join(archiveRoot, "misc"),
 			},
 		},
 		DefaultMaster: "primary",
