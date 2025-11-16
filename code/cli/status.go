@@ -101,22 +101,22 @@ func (s StatusInfo) String() string {
 func determineStatusInfo(project *core.Project, lastModified time.Time) StatusInfo {
 	// Never checked in
 	if project.LastParkAt == nil {
-		return StatusInfo{Emoji: "✗", Text: "Never checked in"}
+		return StatusInfo{Emoji: SymbolCross, Text: "Never checked in"}
 	}
 
 	// Check if modified after last park
 	if project.LastParkMtime != nil {
 		if lastModified.After(*project.LastParkMtime) {
-			return StatusInfo{Emoji: "⚠", Text: "Has uncommitted work"}
+			return StatusInfo{Emoji: SymbolWarning, Text: "Has uncommitted work"}
 		}
 	} else {
 		// Fallback to comparing with LastParkAt
 		if lastModified.After(*project.LastParkAt) {
-			return StatusInfo{Emoji: "⚠", Text: "Has uncommitted work"}
+			return StatusInfo{Emoji: SymbolWarning, Text: "Has uncommitted work"}
 		}
 	}
 
-	return StatusInfo{Emoji: "✓", Text: "Safe to delete"}
+	return StatusInfo{Emoji: SymbolCheck, Text: "Safe to delete"}
 }
 
 // determineStatus determines the sync status of a project (backward compatible)

@@ -110,14 +110,14 @@ func VerifyCmd() error {
 
 	// Report results
 	if len(issues) == 0 && len(warnings) == 0 {
-		fmt.Println("✓ State file is consistent. No issues found.")
+		fmt.Printf("%s State file is consistent. No issues found.\n", SymbolCheck)
 		return nil
 	}
 
 	if len(issues) > 0 {
 		fmt.Println("ERRORS (require attention):")
 		for _, issue := range issues {
-			fmt.Printf("  ✗ %s\n", issue)
+			fmt.Printf("  %s %s\n", SymbolCross, issue)
 		}
 		fmt.Println()
 	}
@@ -125,7 +125,7 @@ func VerifyCmd() error {
 	if len(warnings) > 0 {
 		fmt.Println("WARNINGS (potential issues):")
 		for _, warning := range warnings {
-			fmt.Printf("  ⚠ %s\n", warning)
+			fmt.Printf("  %s %s\n", SymbolWarning, warning)
 		}
 		fmt.Println()
 	}
