@@ -110,93 +110,50 @@ func ExecutePrune(state *State, result *PruneResult, opts PruneOptions, progress
 	result.FailedDeletions = make([]ProjectReport, 0)
 	result.TotalFreed = 0
 
+	// Wrap progress callback in safe function to prevent panics
+	safeProgressFn := func(project ProjectReport, success bool, freed int64) {
+		if progressFn == nil {
+			return
+		}
+		defer func() {
+			if r := recover(); r != nil {
+				// Log panic but don't let it stop the prune operation
+				fmt.Fprintf(os.Stderr, "Warning: progress callback panicked: %v\n", r)
+			}
+		}()
+		progressFn(project, success, freed)
+	}
+
 	for _, project := range result.SelectedProjects {
 		// Get the project from state
 		stateProject, exists := state.Projects[project.Name]
 		if !exists {
 			result.FailedDeletions = append(result.FailedDeletions, project)
-			if progressFn != nil {
-				progressFn(project, false, 0)
-			}
+			safeProgressFn(project, false, 0)
 			continue
 		}
 
 		// Re-verify before deletion (unless force mode)
 		if !opts.Force {
-			currentSize := project.LocalSize
 			isSafe, _ := verifyBeforeDeletion(stateProject, opts.NoHash)
 			if !isSafe {
 				result.FailedDeletions = append(result.FailedDeletions, project)
-				if progressFn != nil {
-					progressFn(project, false, 0)
-				}
+				safeProgressFn(project, false, 0)
 				continue
-			}
-
-			// Update size in case it changed
-			if newSize, err := GetDirSize(project.LocalPath); err == nil {
-				currentSize = newSize
-			}
-
-			// Delete the local directory
-			if err := os.RemoveAll(project.LocalPath); err != nil {
-				result.FailedDeletions = append(result.FailedDeletions, project)
-				if progressFn != nil {
-					progressFn(project, false, 0)
-				}
-				continue
-			}
-
-			// Update state to mark as not grabbed
-			stateProject.IsGrabbed = false
-			stateProject.GrabbedAt = nil
-
-			// Save state after each deletion
-			if err := sm.Save(state); err != nil {
-				result.FailedDeletions = append(result.FailedDeletions, project)
-				if progressFn != nil {
-					progressFn(project, false, 0)
-				}
-				continue
-			}
-
-			result.Deleted = append(result.Deleted, project)
-			result.TotalFreed += currentSize
-			if progressFn != nil {
-				progressFn(project, true, currentSize)
-			}
-		} else {
-			// Force mode: delete without verification
-			currentSize := project.LocalSize
-			if newSize, err := GetDirSize(project.LocalPath); err == nil {
-				currentSize = newSize
-			}
-
-			if err := os.RemoveAll(project.LocalPath); err != nil {
-				result.FailedDeletions = append(result.FailedDeletions, project)
-				if progressFn != nil {
-					progressFn(project, false, 0)
-				}
-				continue
-			}
-
-			stateProject.IsGrabbed = false
-			stateProject.GrabbedAt = nil
-
-			if err := sm.Save(state); err != nil {
-				result.FailedDeletions = append(result.FailedDeletions, project)
-				if progressFn != nil {
-					progressFn(project, false, 0)
-				}
-				continue
-			}
-
-			result.Deleted = append(result.Deleted, project)
-			result.TotalFreed += currentSize
-			if progressFn != nil {
-				progressFn(project, true, currentSize)
 			}
 		}
+
+		// Delete the project (common logic for both force and non-force modes)
+		freed, err := deleteSingleProject(stateProject, project, sm, state)
+		if err != nil {
+			result.FailedDeletions = append(result.FailedDeletions, project)
+			safeProgressFn(project, false, 0)
+			continue
+		}
+
+		result.Deleted = append(result.Deleted, project)
+		result.TotalFreed += freed
+		safeProgressFn(project, true, freed)
 
 		// Check if we've reached the target
 		if result.TotalFreed >= result.TargetBytes {
@@ -205,6 +162,34 @@ func ExecutePrune(state *State, result *PruneResult, opts PruneOptions, progress
 	}
 
 	return nil
+}
+
+// deleteSingleProject handles the actual deletion of a single project
+// Returns the freed space and any error encountered
+func deleteSingleProject(stateProject *Project, project ProjectReport, sm *StateManager, state *State) (int64, error) {
+	// Get current size before deletion
+	currentSize := project.LocalSize
+	if newSize, err := GetDirSize(project.LocalPath); err == nil {
+		currentSize = newSize
+	}
+
+	// Delete the local directory
+	if err := os.RemoveAll(project.LocalPath); err != nil {
+		return 0, fmt.Errorf("failed to delete directory: %w", err)
+	}
+
+	// Update state to mark as not grabbed
+	stateProject.IsGrabbed = false
+	stateProject.GrabbedAt = nil
+
+	// Save state after deletion
+	// Note: If this fails, the directory is already deleted but state is inconsistent
+	// This is logged as a failure so the user knows to investigate
+	if err := sm.Save(state); err != nil {
+		return 0, fmt.Errorf("deleted directory but failed to save state: %w", err)
+	}
+
+	return currentSize, nil
 }
 
 // verifyBeforeDeletion checks if a project is still safe to delete

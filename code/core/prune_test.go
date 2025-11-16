@@ -502,3 +502,154 @@ func TestVerifyBeforeDeletion_UnsafeWithModifiedFile(t *testing.T) {
 		t.Errorf("expected 'Has uncommitted work', got '%s'", status)
 	}
 }
+
+func TestVerifyBeforeDeletion_SafeWithHash(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectPath := filepath.Join(tmpDir, "test")
+	os.MkdirAll(projectPath, 0755)
+	testFile := filepath.Join(projectPath, "test.txt")
+	os.WriteFile(testFile, []byte("test content"), 0644)
+
+	// Compute hash of current content
+	hash, err := ComputeProjectHash(projectPath)
+	if err != nil {
+		t.Fatalf("failed to compute hash: %v", err)
+	}
+
+	parkTime := time.Now().Add(-time.Hour)
+
+	project := &Project{
+		LocalPath:        projectPath,
+		LastParkAt:       &parkTime,
+		LocalContentHash: &hash,
+	}
+
+	// Using hash-based verification (noHash = false)
+	safe, status := verifyBeforeDeletion(project, false)
+	if !safe {
+		t.Errorf("expected safe with matching hash, got status: %s", status)
+	}
+}
+
+func TestVerifyBeforeDeletion_UnsafeWithHashMismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectPath := filepath.Join(tmpDir, "test")
+	os.MkdirAll(projectPath, 0755)
+	testFile := filepath.Join(projectPath, "test.txt")
+	os.WriteFile(testFile, []byte("original content"), 0644)
+
+	// Compute hash of original content
+	hash, err := ComputeProjectHash(projectPath)
+	if err != nil {
+		t.Fatalf("failed to compute hash: %v", err)
+	}
+
+	// Now modify the content (simulating uncommitted changes)
+	os.WriteFile(testFile, []byte("modified content"), 0644)
+
+	parkTime := time.Now().Add(-time.Hour)
+
+	project := &Project{
+		LocalPath:        projectPath,
+		LastParkAt:       &parkTime,
+		LocalContentHash: &hash,
+	}
+
+	// Using hash-based verification (noHash = false)
+	safe, status := verifyBeforeDeletion(project, false)
+	if safe {
+		t.Error("expected unsafe with hash mismatch")
+	}
+	if status != "Has uncommitted work" {
+		t.Errorf("expected 'Has uncommitted work', got '%s'", status)
+	}
+}
+
+func TestVerifyBeforeDeletion_UnsafeWithNoStoredHash(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectPath := filepath.Join(tmpDir, "test")
+	os.MkdirAll(projectPath, 0755)
+	testFile := filepath.Join(projectPath, "test.txt")
+	os.WriteFile(testFile, []byte("test"), 0644)
+
+	parkTime := time.Now().Add(-time.Hour)
+
+	project := &Project{
+		LocalPath:        projectPath,
+		LastParkAt:       &parkTime,
+		LocalContentHash: nil, // No stored hash
+	}
+
+	// Using hash-based verification (noHash = false)
+	safe, status := verifyBeforeDeletion(project, false)
+	if safe {
+		t.Error("expected unsafe with no stored hash")
+	}
+	if status != "Has uncommitted work" {
+		t.Errorf("expected 'Has uncommitted work', got '%s'", status)
+	}
+}
+
+func TestExecutePrune_ProgressCallbackPanicRecovery(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectPath := filepath.Join(tmpDir, "test-project")
+	os.MkdirAll(projectPath, 0755)
+	testFile := filepath.Join(projectPath, "test.txt")
+	os.WriteFile(testFile, []byte("test"), 0644)
+
+	oldTime := time.Now().Add(-time.Hour)
+	os.Chtimes(testFile, oldTime, oldTime)
+	parkTime := oldTime.Add(time.Minute)
+
+	stateDir := filepath.Join(tmpDir, ".parkr")
+	os.MkdirAll(stateDir, 0755)
+	sm := &StateManager{statePath: filepath.Join(stateDir, "state.json")}
+
+	state := &State{
+		Projects: map[string]*Project{
+			"test-project": {
+				LocalPath:     projectPath,
+				IsGrabbed:     true,
+				LastParkAt:    &parkTime,
+				LastParkMtime: &oldTime,
+			},
+		},
+	}
+	sm.Save(state)
+
+	result := &PruneResult{
+		SelectedProjects: []ProjectReport{
+			{
+				Name:      "test-project",
+				LocalPath: projectPath,
+				LocalSize: 4,
+			},
+		},
+		TargetBytes: 100,
+	}
+
+	opts := PruneOptions{
+		Execute: true,
+		NoHash:  true,
+	}
+
+	origNewStateManagerFn := newStateManagerFn
+	defer func() { newStateManagerFn = origNewStateManagerFn }()
+	newStateManagerFn = func() *StateManager { return sm }
+
+	// Progress callback that panics
+	panicCallback := func(project ProjectReport, success bool, freed int64) {
+		panic("intentional panic for testing")
+	}
+
+	// Should not panic even though callback panics
+	err := ExecutePrune(state, result, opts, panicCallback)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Deletion should still succeed
+	if len(result.Deleted) != 1 {
+		t.Errorf("expected 1 deleted project, got %d", len(result.Deleted))
+	}
+}

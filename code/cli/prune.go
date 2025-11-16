@@ -80,8 +80,15 @@ func outputDryRun(result *core.PruneResult) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("Total to free: %s (target: %s)\n",
+	projectCount := len(result.SelectedProjects)
+	projectWord := "projects"
+	if projectCount == 1 {
+		projectWord = "project"
+	}
+	fmt.Printf("Total to free: %s from %d %s (target: %s)\n",
 		core.FormatSize(result.TotalSelected),
+		projectCount,
+		projectWord,
 		core.FormatSize(result.TargetBytes))
 
 	if result.InsufficientSpace {
