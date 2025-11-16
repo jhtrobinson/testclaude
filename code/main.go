@@ -249,21 +249,24 @@ func main() {
 	case "prune":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "Error: target size required")
-			fmt.Fprintln(os.Stderr, "Usage: parkr prune <size> [--exec] [--no-hash] [--force]")
+			fmt.Fprintln(os.Stderr, "Usage: parkr prune <size> [--exec] [--interactive] [--no-hash] [--force]")
 			os.Exit(2)
 		}
 
 		pruneOpts := cli.PruneOptions{
-			TargetSize: os.Args[2],
-			Execute:    false,
-			NoHash:     false,
-			Force:      false,
+			TargetSize:  os.Args[2],
+			Execute:     false,
+			Interactive: false,
+			NoHash:      false,
+			Force:       false,
 		}
 
 		for i := 3; i < len(os.Args); i++ {
 			switch os.Args[i] {
 			case "--exec":
 				pruneOpts.Execute = true
+			case "--interactive", "-i":
+				pruneOpts.Interactive = true
 			case "--no-hash":
 				pruneOpts.NoHash = true
 			case "--force":
@@ -310,7 +313,7 @@ func printUsage() {
 	fmt.Println("  remove <project>  Remove project from state (and optionally archive)")
 	fmt.Println("                    Options: --archive, --yes")
 	fmt.Println("  prune <size>      Free up disk space by deleting safe local copies")
-	fmt.Println("                    Options: --exec, --no-hash, --force")
+	fmt.Println("                    Options: --exec, --interactive, --no-hash, --force")
 	fmt.Println()
 	fmt.Println("Status and Information:")
 	fmt.Println("  status            Show all grabbed projects with sync status")
