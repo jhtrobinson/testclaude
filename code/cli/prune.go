@@ -8,10 +8,11 @@ import (
 
 // PruneOptions contains configuration for the prune command
 type PruneOptions struct {
-	TargetSize string // Human-readable target size (e.g., "10G", "500M")
-	Execute    bool   // If true, actually delete; if false, dry-run
-	NoHash     bool   // Use mtime verification instead of hash
-	Force      bool   // Skip verification entirely (with warning)
+	TargetSize  string // Human-readable target size (e.g., "10G", "500M")
+	Execute     bool   // If true, actually delete; if false, dry-run
+	Interactive bool   // If true, allow user to interactively select projects
+	NoHash      bool   // Use mtime verification instead of hash
+	Force       bool   // Skip verification entirely (with warning)
 }
 
 // PruneCmd executes the prune command
@@ -58,6 +59,11 @@ func PruneCmd(opts PruneOptions) error {
 			fmt.Println("All grabbed projects have uncommitted changes or have never been parked.")
 		}
 		return nil
+	}
+
+	// Interactive mode
+	if opts.Interactive {
+		return runInteractiveMode(state, result, pruneOpts)
 	}
 
 	if !opts.Execute {
@@ -139,4 +145,53 @@ func executeAndReport(state *core.State, result *core.PruneResult, opts core.Pru
 	}
 
 	return nil
+}
+
+// runInteractiveMode runs the interactive selection mode for pruning
+func runInteractiveMode(state *core.State, result *core.PruneResult, opts core.PruneOptions) error {
+	// Run interactive selection
+	selector, err := core.RunInteractiveSelection(result.Candidates, result.TargetBytes)
+	if err != nil {
+		return fmt.Errorf("interactive selection failed: %w", err)
+	}
+
+	// Check if user quit without confirming
+	if selector.WasQuit() {
+		fmt.Println("Selection cancelled. No projects deleted.")
+		return nil
+	}
+
+	// Get selected candidates
+	selectedCandidates := selector.GetSelected()
+	if len(selectedCandidates) == 0 {
+		fmt.Println("No projects selected. Nothing to delete.")
+		return nil
+	}
+
+	// Update result with user selections
+	result.SelectedProjects = make([]core.ProjectReport, 0)
+	result.TotalSelected = 0
+	for _, c := range selectedCandidates {
+		result.SelectedProjects = append(result.SelectedProjects, c.ProjectReport)
+		result.TotalSelected += c.LocalSize
+	}
+
+	// Show confirmation
+	fmt.Printf("\nYou selected %d project(s) to delete:\n", len(selectedCandidates))
+	for i, c := range selectedCandidates {
+		fmt.Printf("%d. %s (%s)\n", i+1, c.Name, core.FormatSize(c.LocalSize))
+	}
+	fmt.Printf("\nTotal to free: %s\n", core.FormatSize(result.TotalSelected))
+
+	// Ask for final confirmation
+	fmt.Print("\nProceed with deletion? [y/N]: ")
+	var response string
+	_, err = fmt.Scanln(&response)
+	if err != nil || (response != "y" && response != "Y" && response != "yes" && response != "Yes") {
+		fmt.Println("Deletion cancelled.")
+		return nil
+	}
+
+	// Execute the deletion
+	return executeAndReport(state, result, opts)
 }
