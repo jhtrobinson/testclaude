@@ -18,52 +18,7 @@ Get basic project tracking working with essential commands.
 - [ ] `parkr grab <project>` - Copy project from archive to local (for later retrieval)
 
 ### Testing Phase 1
-```bash
-# Clean up any previous state
-rm -rf ~/.parkr /tmp/parkr-archive /tmp/parkr-test-project
-
-# Build the binary
-cd code && go build -o parkr
-
-# 1. Initialize
-./parkr init /tmp/parkr-archive
-# Expected: Creates ~/.parkr/state.json with archive root at /tmp/parkr-archive
-
-# 2. Create a local project
-mkdir -p /tmp/parkr-test-project
-echo "hello" > /tmp/parkr-test-project/README.md
-
-# 3. Add project to archive
-./parkr add /tmp/parkr-test-project
-# Expected: Copies to /tmp/parkr-archive/code/parkr-test-project
-# Expected: Auto-detects category as "code"
-# Expected: Shows in state as grabbed
-
-# 4. List projects
-./parkr list
-# Expected: Shows parkr-test-project as "grabbed"
-
-# 5. Modify and park
-echo "world" >> /tmp/parkr-test-project/README.md
-./parkr park parkr-test-project
-# Expected: Syncs changes to archive (archive now has "hello\nworld")
-
-# 6. Remove local copy (with verification)
-PARKR_ALIVE=1 ./parkr rm parkr-test-project --no-hash
-# Expected: Mtime verification passes, deletes /tmp/parkr-test-project
-
-# 7. Verify it's gone
-ls /tmp/parkr-test-project
-# Expected: No such file or directory
-
-# 8. Grab it back
-./parkr grab parkr-test-project
-# Expected: Restores from archive to ~/code/parkr-test-project
-
-# 9. Verify content preserved
-cat ~/code/parkr-test-project/README.md
-# Expected: "hello\nworld"
-```
+See [TEST-phase-1.md](TEST-phase-1.md) for full test script.
 
 ---
 
@@ -80,82 +35,7 @@ Add hash-based verification for safe deletion.
 - [x] Dirty detection (mtime vs hash computed time)
 
 ### Testing Phase 2
-```bash
-# Setup (assumes Phase 1 passing)
-rm -rf ~/.parkr /tmp/parkr-archive ~/code/parkr-test-project
-cd code && go build -o parkr
-./parkr init /tmp/parkr-archive
-mkdir -p /tmp/parkr-test-project
-echo "hello" > /tmp/parkr-test-project/README.md
-./parkr add /tmp/parkr-test-project
-
-# Test 1: Hash catches silent modification (mtime doesn't)
-# Modify file content but reset mtime to fool mtime-based check
-echo "modified" > /tmp/parkr-test-project/README.md
-touch -t 202001010000 /tmp/parkr-test-project/README.md  # Set old mtime
-
-# With --no-hash: mtime check passes (dangerous!)
-PARKR_ALIVE=1 ./parkr rm parkr-test-project --no-hash
-# Expected: Mtime verification passes, deletes despite content change
-
-# Restore for hash test
-./parkr grab parkr-test-project
-echo "modified again" > ~/code/parkr-test-project/README.md
-touch -t 202001010000 ~/code/parkr-test-project/README.md  # Frig mtime
-
-# With hash: content check catches it
-PARKR_ALIVE=1 ./parkr rm parkr-test-project
-# Expected: ERROR - hash mismatch detected, refuses to delete
-
-# Test 2: Workflow with hash enabled (default)
-rm -rf ~/.parkr /tmp/parkr-archive ~/code/parkr-test-project
-./parkr init /tmp/parkr-archive
-mkdir -p /tmp/parkr-test-project
-echo "original" > /tmp/parkr-test-project/README.md
-./parkr add /tmp/parkr-test-project
-
-# Park computes hashes
-./parkr park parkr-test-project
-# Expected: Sets archive_content_hash and local_content_hash in state
-
-# Clean remove (hashes match)
-PARKR_ALIVE=1 ./parkr rm parkr-test-project
-# Expected: Hash verification passes, removes local
-
-# Grab back
-./parkr grab parkr-test-project
-
-# Modify without parking
-echo "unsaved work" >> ~/code/parkr-test-project/README.md
-
-# Remove blocked (hashes don't match)
-PARKR_ALIVE=1 ./parkr rm parkr-test-project
-# Expected: ERROR - local hash differs from parked hash
-
-# Test 3: Workflow with --no-hash parked
-rm -rf ~/.parkr /tmp/parkr-archive ~/code/parkr-test-project
-./parkr init /tmp/parkr-archive
-mkdir -p /tmp/parkr-test-project
-echo "original" > /tmp/parkr-test-project/README.md
-./parkr add /tmp/parkr-test-project
-
-# Park without hashes
-./parkr park parkr-test-project --no-hash
-# Expected: Syncs but doesn't compute hashes, sets no_hash_mode=true
-
-# rm requires --no-hash flag when parked with --no-hash
-PARKR_ALIVE=1 ./parkr rm parkr-test-project
-# Expected: ERROR - project was parked with --no-hash, must specify --no-hash or --force
-
-PARKR_ALIVE=1 ./parkr rm parkr-test-project --no-hash
-# Expected: Uses mtime verification, removes local
-
-# Test 4: --force bypasses all verification
-./parkr grab parkr-test-project
-echo "unsaved changes" >> ~/code/parkr-test-project/README.md
-PARKR_ALIVE=1 ./parkr rm parkr-test-project --force
-# Expected: Skips all verification, deletes anyway with warning
-```
+See [TEST-phase-2.md](TEST-phase-2.md) for full test script and unit tests.
 
 ---
 
@@ -168,18 +48,23 @@ Add visibility into project state.
 - [ ] `parkr verify` - Check state file consistency
 - [ ] `parkr config` - Show current configuration
 
+### Testing Phase 3
+See [TEST-phase-3.md](TEST-phase-3.md) for full test script.
+
 ---
 
 ## Phase 4: Project Management
 Add/remove projects from system.
 
 - [ ] `parkr add <local-path>` - Add local project to archive
-- [ ] Project type auto-detection (Python, R, Node)
 - [ ] `parkr add --move` option
-- [ ] `parkr checkout --force` option
-- [ ] `parkr checkout --to <path>` option
+- [ ] `parkr grab --force` option
+- [ ] `parkr grab --to <path>` option
 - [ ] `parkr remove <project>` - Remove from archive
 - [ ] `parkr remove --everywhere` option
+
+### Testing Phase 4
+See [TEST-phase-4.md](TEST-phase-4.md) for full test script.
 
 ---
 
