@@ -115,7 +115,11 @@ func determineSafetyStatus(project *Project, lastModified time.Time, recomputeHa
 		}
 
 		// Compare with stored local hash from last park
-		if project.LocalContentHash != nil && currentHash != *project.LocalContentHash {
+		if project.LocalContentHash == nil {
+			// Missing hash data for non-NoHashMode project - treat as unsafe
+			return false, "Missing hash data"
+		}
+		if currentHash != *project.LocalContentHash {
 			return false, "Has uncommitted work"
 		}
 	} else {

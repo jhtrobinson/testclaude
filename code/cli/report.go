@@ -33,7 +33,7 @@ func ReportCmd(opts ReportOptions) error {
 	// Handle empty state
 	if summary.TotalProjects == 0 {
 		if opts.JSONOutput {
-			return outputJSON(summary)
+			return outputJSON(summary, opts.CandidatesOnly)
 		}
 		fmt.Println("No projects currently checked out.")
 		return nil
@@ -50,15 +50,31 @@ func ReportCmd(opts ReportOptions) error {
 
 	// Output format
 	if opts.JSONOutput {
-		return outputJSON(summary)
+		return outputJSON(summary, opts.CandidatesOnly)
 	}
 
 	return outputHumanReadable(summary, projectsToShow, opts.CandidatesOnly)
 }
 
 // outputJSON outputs the report as JSON
-func outputJSON(summary *core.ReportSummary) error {
-	data, err := json.MarshalIndent(summary, "", "  ")
+func outputJSON(summary *core.ReportSummary, candidatesOnly bool) error {
+	var output interface{}
+	if candidatesOnly {
+		// Output only candidates when --candidates flag is used
+		output = struct {
+			SafeToDelete     int                   `json:"safe_to_delete"`
+			RecoverableSpace int64                 `json:"recoverable_space"`
+			Candidates       []core.ProjectReport  `json:"candidates"`
+		}{
+			SafeToDelete:     summary.SafeToDelete,
+			RecoverableSpace: summary.RecoverableSpace,
+			Candidates:       summary.Candidates,
+		}
+	} else {
+		output = summary
+	}
+
+	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
@@ -111,7 +127,7 @@ func outputHumanReadable(summary *core.ReportSummary, projects []core.ProjectRep
 		if len(summary.Candidates) > 0 {
 			fmt.Println("PRUNING CANDIDATES (safe to delete, oldest first):")
 			for i, c := range summary.Candidates {
-				fmt.Printf("%d. %s (%s)\n", i+1, c.Name, core.FormatSize(c.LocalSize))
+				fmt.Printf("%d. %s (%s) - last modified %s\n", i+1, c.Name, core.FormatSize(c.LocalSize), formatTimeAgo(c.LastModified))
 			}
 			fmt.Println()
 		}
