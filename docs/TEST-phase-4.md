@@ -142,7 +142,7 @@ ls /tmp/parkr-archive/code/parkr-test-remove/
 - [ ] Does NOT delete local copy (if grabbed)
 - [ ] Project no longer appears in list
 
-## Test: parkr remove --everywhere
+## Test: parkr remove --archive
 
 ```bash
 # Setup
@@ -151,8 +151,8 @@ echo "nuke me" > /tmp/parkr-test-nuke/README.md
 ./parkr add /tmp/parkr-test-nuke
 ./parkr grab parkr-test-nuke
 
-./parkr remove parkr-test-nuke --everywhere
-# Expected: WARNING - this will delete archive and local copies
+./parkr remove parkr-test-nuke --archive
+# Expected: WARNING - this will delete archive copy
 # Expected: Prompts for confirmation
 
 # After confirmation:
@@ -160,7 +160,7 @@ ls /tmp/parkr-archive/code/parkr-test-nuke/
 # Expected: No such file or directory
 
 ls ~/code/parkr-test-nuke/
-# Expected: No such file or directory
+# Expected: Directory still exists (local copy preserved)
 
 ./parkr list
 # Expected: parkr-test-nuke not listed
@@ -171,7 +171,7 @@ ls ~/code/parkr-test-nuke/
 - [ ] Prompts for confirmation
 - [ ] Removes from state file
 - [ ] Deletes archive copy
-- [ ] Deletes local copy (if grabbed)
+- [ ] Local copy preserved (not deleted)
 
 ## Edge Cases
 
@@ -206,5 +206,5 @@ echo "collision" > /tmp/duplicate/README.md
 - [ ] checkout --force overwrites existing local copy
 - [ ] checkout --to allows custom local path
 - [ ] remove removes from state but preserves files
-- [ ] remove --everywhere deletes everything with confirmation
+- [ ] remove --archive deletes archive copy with confirmation
 - [ ] All commands handle edge cases gracefully

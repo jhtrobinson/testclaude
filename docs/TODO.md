@@ -60,8 +60,8 @@ Add/remove projects from system.
 - [ ] `parkr add --move` option
 - [ ] `parkr grab --force` option
 - [ ] `parkr grab --to <path>` option
-- [ ] `parkr remove <project>` - Remove from archive
-- [ ] `parkr remove --everywhere` option
+- [ ] `parkr remove <project>` - Remove from state file only
+- [ ] `parkr remove --archive` option - Remove from state and delete archive copy
 
 ### Testing Phase 4
 See [TEST-phase-4.md](TEST-phase-4.md) for full test script.
