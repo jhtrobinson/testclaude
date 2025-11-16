@@ -10,7 +10,7 @@ import (
 )
 
 // GrabCmd checks out a project from archive to local
-func GrabCmd(projectName string) error {
+func GrabCmd(projectName string, force bool, customPath string) error {
 	sm := core.NewStateManager()
 	state, err := sm.Load()
 	if err != nil {
@@ -19,7 +19,10 @@ func GrabCmd(projectName string) error {
 
 	// Check if already grabbed
 	if existingProject, exists := state.Projects[projectName]; exists && existingProject.IsGrabbed {
-		return fmt.Errorf("project '%s' is already grabbed at %s", projectName, existingProject.LocalPath)
+		if !force {
+			return fmt.Errorf("project '%s' is already grabbed at %s (use --force to overwrite)", projectName, existingProject.LocalPath)
+		}
+		fmt.Printf("Warning: project '%s' is already grabbed, --force specified, overwriting...\n", projectName)
 	}
 
 	// Find project in archive
@@ -34,17 +37,43 @@ func GrabCmd(projectName string) error {
 	}
 
 	// Determine local path
-	localRoot := core.GetDefaultLocalPath(archiveProject.Category)
-	localPath := filepath.Join(localRoot, projectName)
+	var localPath string
+	if customPath != "" {
+		// Expand ~ to home directory
+		if len(customPath) > 0 && customPath[0] == '~' {
+			homeDir, _ := os.UserHomeDir()
+			localPath = filepath.Join(homeDir, customPath[1:])
+		} else {
+			localPath = customPath
+		}
+		// Convert relative to absolute path
+		if !filepath.IsAbs(localPath) {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get current directory: %w", err)
+			}
+			localPath = filepath.Join(cwd, localPath)
+		}
+	} else {
+		localRoot := core.GetDefaultLocalPath(archiveProject.Category)
+		localPath = filepath.Join(localRoot, projectName)
+	}
 
 	// Check if local path already exists
 	if _, err := os.Stat(localPath); err == nil {
-		return fmt.Errorf("local path already exists: %s (use --force to overwrite)", localPath)
+		if !force {
+			return fmt.Errorf("local path already exists: %s (use --force to overwrite)", localPath)
+		}
+		fmt.Printf("Warning: removing existing local copy at %s...\n", localPath)
+		if err := os.RemoveAll(localPath); err != nil {
+			return fmt.Errorf("failed to remove existing local copy: %w", err)
+		}
 	}
 
-	// Ensure local root exists
-	if err := os.MkdirAll(localRoot, 0755); err != nil {
-		return fmt.Errorf("failed to create local directory: %w", err)
+	// Ensure parent directory exists
+	parentDir := filepath.Dir(localPath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
 	// Create the destination directory
