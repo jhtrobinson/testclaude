@@ -239,6 +239,195 @@ cmd.Stderr = nil
 
 ---
 
+## 🔁 DUPLICATED CODE (Extract Common Patterns)
+
+### 1. StateManager Load Pattern
+**Location:** `cli/grab.go:14-18`, `cli/park.go:13-17`, `cli/rm.go:13-17`, `cli/list.go:13-17`
+```go
+sm := core.NewStateManager()
+state, err := sm.Load()
+if err != nil {
+    return err
+}
+```
+**Fix:** Create middleware/decorator or base command struct
+
+### 2. Project Grabbed Validation
+**Location:** `cli/park.go:20-22`, `cli/rm.go:19-21`
+```go
+project, exists := state.Projects[projectName]
+if !exists || !project.IsGrabbed {
+    return fmt.Errorf("project '%s' is not currently grabbed", projectName)
+}
+```
+**Fix:** Extract to `state.GetGrabbedProject(name)` helper
+
+### 3. Local Path Existence Check
+**Location:** `cli/park.go:26-28`, `cli/rm.go:25` (similar pattern)
+```go
+if _, err := os.Stat(project.LocalPath); os.IsNotExist(err) {
+    return fmt.Errorf("local path does not exist: %s", project.LocalPath)
+}
+```
+**Fix:** Extract to `project.VerifyLocalPathExists()` method
+
+### 4. Rsync Trailing Slash Logic
+**Location:** `core/rsync.go:11-13`, `core/rsync.go:29-31`
+```go
+if src[len(src)-1] != '/' {
+    src = src + "/"
+}
+```
+**Fix:** Extract to `ensureTrailingSlash(path string)` helper
+
+### 5. GetNewestMtime Double Dereference
+**Location:** `cli/park.go:58`, `cli/rm.go:53`
+```go
+if newestInfo != nil && *newestInfo != nil {
+    mtime := (*newestInfo).ModTime()
+```
+**Fix:** Fix return type to return `time.Time` directly (eliminates duplication)
+
+---
+
+## 🏛️ SOLID PRINCIPLE VIOLATIONS
+
+### S - Single Responsibility Principle ❌
+
+**`cli/grab.go` has 5 responsibilities:**
+1. Load state from disk
+2. Validate user input and project existence
+3. Discover archive projects (scanning filesystem)
+4. Perform file system operations (rsync, mkdir)
+5. Update and save state
+
+**`core/state.go` mixes concerns:**
+1. Data structures (Project, State structs)
+2. File I/O operations (Load, Save)
+3. Business logic (GetArchivePath)
+4. Default configuration (CreateDefault)
+
+**Recommendation:** Split into:
+- `core/models.go` - Data structures only
+- `core/persistence.go` - File I/O
+- `core/operations.go` - Business logic
+- `core/config.go` - Configuration management
+
+### O - Open/Closed Principle ❌
+
+**`main.go` switch statement:**
+```go
+switch command {
+case "init": ...
+case "list", "ls": ...
+case "grab", "checkout": ...
+// Must modify this file for every new command
+}
+```
+**Issue:** Closed for extension - adding new commands requires modifying main.go
+**Fix:** Use command registry pattern or cobra's built-in command system
+
+**`core/state.go:149-160` hardcoded mappings:**
+```go
+switch category {
+case "pycharm": return filepath.Join(homeDir, "PycharmProjects")
+case "rstudio": return filepath.Join(homeDir, "RStudioProjects")
+default: return filepath.Join(homeDir, "code")
+}
+```
+**Issue:** New categories require code changes
+**Fix:** Make category→path mapping configurable
+
+### L - Liskov Substitution Principle ⚠️
+
+**Not applicable** - No inheritance or polymorphism used anywhere. This itself is a design smell; polymorphism would enable better testing and extensibility.
+
+### I - Interface Segregation Principle ❌
+
+**No interfaces defined at all.** The codebase uses only concrete types:
+- No `StateRepository` interface for persistence
+- No `FileSystem` interface for OS operations
+- No `SyncEngine` interface for rsync operations
+- No `ProjectValidator` interface for validation logic
+
+**Impact:**
+- Cannot mock dependencies for unit testing
+- Cannot swap implementations (e.g., different sync backends)
+- Tight coupling between all components
+
+**Recommendation:** Define focused interfaces:
+```go
+type StateLoader interface {
+    Load() (*State, error)
+}
+
+type StateSaver interface {
+    Save(*State) error
+}
+
+type Syncer interface {
+    Sync(src, dst string) error
+}
+
+type ProjectValidator interface {
+    ValidateGrabbed(projectName string) (*Project, error)
+}
+```
+
+### D - Dependency Inversion Principle ❌
+
+**High-level modules depend directly on low-level modules:**
+
+```go
+// cli/grab.go - High-level policy depends on concrete implementation
+func GrabCmd(projectName string) error {
+    sm := core.NewStateManager()  // Direct instantiation
+    // ...
+    core.DiscoverArchiveProjects(state)  // Direct function call
+    core.Rsync(archiveProject.Path, localPath)  // Direct dependency
+}
+```
+
+```go
+// core/rsync.go - Depends directly on exec.Command
+cmd := exec.Command("rsync", "-av", "--delete", src, dst)
+```
+
+**Issues:**
+- Cannot inject test doubles
+- Cannot replace rsync with alternative sync mechanism
+- Cannot test CLI commands without real filesystem
+- Cannot test state operations without real disk I/O
+
+**Recommendation:** Invert dependencies:
+```go
+// Define abstractions
+type Syncer interface {
+    Sync(src, dst string) error
+}
+
+type StateRepository interface {
+    Load() (*State, error)
+    Save(*State) error
+}
+
+// High-level depends on abstraction
+type GrabService struct {
+    stateRepo StateRepository
+    syncer    Syncer
+    fs        FileSystem
+}
+
+func (s *GrabService) Grab(projectName string) error {
+    state, err := s.stateRepo.Load()
+    // ...
+}
+
+// Wire up in main.go with concrete implementations
+```
+
+---
+
 ## Recommended Tools
 
 - **CLI Framework:** github.com/spf13/cobra
@@ -246,3 +435,4 @@ cmd.Stderr = nil
 - **Testing:** Built-in testing + github.com/stretchr/testify
 - **Validation:** Custom validators or github.com/go-playground/validator
 - **Config:** github.com/spf13/viper (pairs with cobra)
+- **Mocking:** github.com/stretchr/testify/mock or github.com/golang/mock
