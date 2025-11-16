@@ -157,7 +157,9 @@ For each feature:
 4. **Merge agent**:
    - Creates TODO list to track progress
    - Processes one feature at a time
-   - Merges feature branch into pre-merge branch (`phase-N-integration-premerge`)
+   - **Squash merges** feature branch into pre-merge branch (`phase-N-integration-premerge`)
+     - Use `git merge --squash` to combine all feature commits into a single commit
+     - This keeps the integration branch history clean
    - If conflicts occur: reads spec for conflicting features, resolves ensuring both work
    - If resolution not straightforward: stops and reports to programmer
    - Reports status and waits for programmer before next feature
