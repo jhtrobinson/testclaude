@@ -280,3 +280,58 @@ func TestFormatSizeCompact_Precision(t *testing.T) {
 		})
 	}
 }
+
+func TestParseSize_Overflow(t *testing.T) {
+	// Test that very large values are rejected to prevent overflow
+	tests := []struct {
+		name        string
+		input       string
+		errContains string
+	}{
+		{"overflow T", "9999999999999999T", "overflow"},
+		{"overflow G", "9999999999999999G", "overflow"},
+		{"overflow M", "9999999999999999999M", "overflow"},
+		{"overflow K", "9999999999999999999999K", "overflow"},
+		// Max int64 is 9,223,372,036,854,775,807
+		// Max TB is ~8388607 (8.3 million TB)
+		{"near max T", "10000000T", "overflow"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSize(tt.input)
+			if err == nil {
+				t.Errorf("ParseSize(%q) expected overflow error but got none", tt.input)
+				return
+			}
+			if !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("ParseSize(%q) error = %q, want error containing %q", tt.input, err.Error(), tt.errContains)
+			}
+		})
+	}
+}
+
+func TestParseSize_LargeValidValues(t *testing.T) {
+	// Test that large but valid values work correctly
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"8000T", "8000T"},
+		{"8000000G", "8000000G"},
+		{"8000000000M", "8000000000M"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseSize(tt.input)
+			if err != nil {
+				t.Errorf("ParseSize(%q) returned unexpected error: %v", tt.input, err)
+				return
+			}
+			if result <= 0 {
+				t.Errorf("ParseSize(%q) = %d, want positive value", tt.input, result)
+			}
+		})
+	}
+}

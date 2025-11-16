@@ -2,12 +2,17 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
-// Size constants for unit conversions
+// Size constants for unit conversions (binary, not decimal)
+// Kilobyte = 1,024
+// Megabyte = 1,048,576
+// Gigabyte = 1,073,741,824
+// Terabyte = 1,099,511,627,776
 const (
 	Byte     int64 = 1
 	Kilobyte       = 1024 * Byte
@@ -22,7 +27,8 @@ var sizePattern = regexp.MustCompile(`(?i)^(\d+(?:\.\d+)?)\s*([KMGT]B?)$`)
 // ParseSize converts a human-readable size string to bytes.
 // Supported formats: 10G, 500M, 2T, 1.5GB, 100MB, 1024K, etc.
 // Units are case insensitive: G/GB, M/MB, K/KB, T/TB
-// Returns an error for invalid formats, negative, or zero values.
+// Returns an error for invalid formats, negative, zero values, or overflow.
+// Note: Decimal precision is limited by float64; very precise decimals may be truncated.
 func ParseSize(sizeStr string) (int64, error) {
 	sizeStr = strings.TrimSpace(sizeStr)
 	if sizeStr == "" {
@@ -58,6 +64,12 @@ func ParseSize(sizeStr string) (int64, error) {
 		multiplier = Terabyte
 	default:
 		return 0, fmt.Errorf("unsupported unit: %q", unit)
+	}
+
+	// Check for overflow before multiplication
+	maxValue := float64(math.MaxInt64) / float64(multiplier)
+	if value > maxValue {
+		return 0, fmt.Errorf("size too large: would overflow (max ~%.0f%s)", maxValue, unit[:1])
 	}
 
 	bytes := int64(value * float64(multiplier))
