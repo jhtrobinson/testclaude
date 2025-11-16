@@ -60,9 +60,42 @@ func RmCmd(projectName string, noHash bool, force bool) error {
 
 			fmt.Println("Mtime verification passed.")
 		} else {
-			// Hash verification would go here in Phase 2
-			fmt.Println("Hash verification not yet implemented - use --no-hash for mtime verification")
-			return fmt.Errorf("hash verification not available, use --no-hash")
+			// Hash verification
+			if project.LocalContentHash == nil {
+				return fmt.Errorf("project '%s' has no stored hash - park with hashing first or use --no-hash", projectName)
+			}
+
+			// Check if files were modified since hash was computed
+			if project.LocalHashComputedAt != nil {
+				newestInfo, err := core.GetNewestMtime(project.LocalPath)
+				if err != nil {
+					return fmt.Errorf("failed to check local files: %w", err)
+				}
+				if newestInfo != nil && *newestInfo != nil {
+					currentMtime := (*newestInfo).ModTime()
+					if currentMtime.After(*project.LocalHashComputedAt) {
+						fmt.Printf("Warning: files modified since hash was computed (newest: %s, hash computed: %s)\n",
+							currentMtime.Format("2006-01-02 15:04:05"), project.LocalHashComputedAt.Format("2006-01-02 15:04:05"))
+						fmt.Println("Recomputing hash to verify...")
+					}
+				}
+			}
+
+			fmt.Println("Computing current local hash...")
+			currentHash, err := core.ComputeProjectHash(project.LocalPath)
+			if err != nil {
+				return fmt.Errorf("failed to compute local hash: %w", err)
+			}
+
+			if currentHash != *project.LocalContentHash {
+				return fmt.Errorf("hash mismatch - local content has changed since last park:\n"+
+					"  Stored hash:  %s\n"+
+					"  Current hash: %s\n"+
+					"Park your changes first or use --force to delete anyway",
+					*project.LocalContentHash, currentHash)
+			}
+
+			fmt.Println("Hash verification passed.")
 		}
 	} else {
 		fmt.Println("Warning: Skipping verification (--force)")

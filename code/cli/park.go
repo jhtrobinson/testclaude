@@ -9,7 +9,7 @@ import (
 )
 
 // ParkCmd syncs local changes back to archive
-func ParkCmd(projectName string) error {
+func ParkCmd(projectName string, noHash bool) error {
 	sm := core.NewStateManager()
 	state, err := sm.Load()
 	if err != nil {
@@ -40,6 +40,16 @@ func ParkCmd(projectName string) error {
 
 	fmt.Printf("Parking %s from %s to %s...\n", projectName, project.LocalPath, archivePath)
 
+	// Compute local hash before sync (if not in no-hash mode)
+	var localHashBefore string
+	if !noHash {
+		fmt.Println("Computing local content hash...")
+		localHashBefore, err = core.ComputeProjectHash(project.LocalPath)
+		if err != nil {
+			return fmt.Errorf("failed to compute local hash: %w", err)
+		}
+	}
+
 	// Rsync from local to archive
 	if err := core.Rsync(project.LocalPath, archivePath); err != nil {
 		return fmt.Errorf("failed to sync project: %w", err)
@@ -54,14 +64,41 @@ func ParkCmd(projectName string) error {
 	// Update state
 	now := time.Now()
 	project.LastParkAt = &now
+	project.NoHashMode = noHash
 
 	if newestInfo != nil && *newestInfo != nil {
 		mtime := (*newestInfo).ModTime()
 		project.LastParkMtime = &mtime
 	}
 
-	// For Phase 1, we're in no-hash mode
-	project.NoHashMode = true
+	// Compute and verify hashes if not in no-hash mode
+	if !noHash {
+		fmt.Println("Verifying archive content hash...")
+		archiveHash, err := core.ComputeProjectHash(archivePath)
+		if err != nil {
+			return fmt.Errorf("failed to compute archive hash: %w", err)
+		}
+
+		if localHashBefore != archiveHash {
+			return fmt.Errorf("hash mismatch after sync:\n"+
+				"  Local hash:   %s\n"+
+				"  Archive hash: %s\n"+
+				"Possible causes:\n"+
+				"  - Files were modified during rsync operation\n"+
+				"  - Rsync failed to copy some files (check permissions)\n"+
+				"  - Disk I/O errors occurred during sync\n"+
+				"  - Symlinks or special files handled differently",
+				localHashBefore, archiveHash)
+		}
+
+		// Store hashes
+		project.LocalContentHash = &localHashBefore
+		project.ArchiveContentHash = &archiveHash
+		hashTime := time.Now()
+		project.LocalHashComputedAt = &hashTime
+
+		fmt.Println("Hash verification passed.")
+	}
 
 	if err := sm.Save(state); err != nil {
 		return fmt.Errorf("failed to update state: %w", err)
