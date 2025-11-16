@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jamespark/parkr/cli"
+	"github.com/jamespark/parkr/core"
 )
 
 func main() {
@@ -203,6 +204,48 @@ func main() {
 	case "config":
 		err = cli.ConfigCmd()
 
+	case "report":
+		opts := cli.ReportOptions{
+			CandidatesOnly:  false,
+			RecomputeHashes: false,
+			SortBy:          core.SortByModified,
+			JSONOutput:      false,
+		}
+
+		for i := 2; i < len(os.Args); i++ {
+			switch os.Args[i] {
+			case "--candidates":
+				opts.CandidatesOnly = true
+			case "--recompute-hashes":
+				opts.RecomputeHashes = true
+			case "--json":
+				opts.JSONOutput = true
+			case "--sort":
+				if i+1 >= len(os.Args) {
+					fmt.Fprintln(os.Stderr, "Error: --sort requires a field argument (size|modified|name)")
+					os.Exit(2)
+				}
+				sortField := os.Args[i+1]
+				switch sortField {
+				case "size":
+					opts.SortBy = core.SortBySize
+				case "modified":
+					opts.SortBy = core.SortByModified
+				case "name":
+					opts.SortBy = core.SortByName
+				default:
+					fmt.Fprintf(os.Stderr, "Error: invalid sort field '%s' (use size|modified|name)\n", sortField)
+					os.Exit(2)
+				}
+				i++ // Skip next argument as it's the sort field
+			default:
+				fmt.Fprintf(os.Stderr, "Error: unknown option '%s'\n", os.Args[i])
+				os.Exit(2)
+			}
+		}
+
+		err = cli.ReportCmd(opts)
+
 	case "help", "--help", "-h":
 		printUsage()
 
@@ -242,6 +285,8 @@ func printUsage() {
 	fmt.Println("  info <project>    Show detailed project information")
 	fmt.Println("  local             Show all local projects")
 	fmt.Println("                    Options: --unmanaged")
+	fmt.Println("  report            Show disk usage report for grabbed projects")
+	fmt.Println("                    Options: --candidates, --recompute-hashes, --sort <field>, --json")
 	fmt.Println("  verify            Check state file consistency")
 	fmt.Println("  config            Show current configuration")
 	fmt.Println()
