@@ -19,7 +19,7 @@ func LocalCmd(unmanagedOnly bool) error {
 	}
 
 	// Get all local directories to scan
-	localDirs := getLocalDirectories()
+	localDirs := getLocalDirectoriesFromState(state)
 
 	// Build a set of managed projects (by local path)
 	managedPaths := make(map[string]string) // path -> project name
@@ -145,7 +145,16 @@ func LocalCmd(unmanagedOnly bool) error {
 	return nil
 }
 
-// getLocalDirectories returns all directories that should be scanned for local projects
+// getLocalDirectoriesFromState returns all directories that should be scanned for local projects
+// It uses configured directories from state if available, otherwise falls back to defaults
+func getLocalDirectoriesFromState(state *core.State) []string {
+	if state != nil && len(state.LocalDirectories) > 0 {
+		return state.LocalDirectories
+	}
+	return getLocalDirectories()
+}
+
+// getLocalDirectories returns the default directories that should be scanned for local projects
 func getLocalDirectories() []string {
 	homeDir, _ := os.UserHomeDir()
 

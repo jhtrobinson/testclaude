@@ -41,8 +41,13 @@ func ConfigCmd() error {
 	fmt.Println()
 
 	// Local directories
-	fmt.Println("Local directories (scanned by 'parkr local'):")
-	for _, dir := range getLocalDirectories() {
+	localDirs := getLocalDirectoriesFromState(state)
+	if len(state.LocalDirectories) > 0 {
+		fmt.Println("Local directories (configured in state):")
+	} else {
+		fmt.Println("Local directories (using defaults):")
+	}
+	for _, dir := range localDirs {
 		fmt.Printf("  - %s\n", dir)
 	}
 	fmt.Println()

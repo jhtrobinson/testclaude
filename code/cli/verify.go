@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jamespark/parkr/core"
 )
@@ -76,11 +77,34 @@ func VerifyCmd() error {
 	}
 
 	// Check for orphaned local projects (projects in local dirs not tracked)
-	localDirs := getLocalDirectories()
+	localDirs := getLocalDirectoriesFromState(state)
 	trackedLocalPaths := make(map[string]bool)
 	for _, project := range state.Projects {
 		if project.IsGrabbed && project.LocalPath != "" {
 			trackedLocalPaths[project.LocalPath] = true
+		}
+	}
+
+	// Scan local directories for untracked projects
+	for _, localDir := range localDirs {
+		if _, err := os.Stat(localDir); os.IsNotExist(err) {
+			continue
+		}
+
+		entries, err := os.ReadDir(localDir)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() || entry.Name()[0] == '.' {
+				continue
+			}
+
+			projectPath := filepath.Join(localDir, entry.Name())
+			if !trackedLocalPaths[projectPath] {
+				warnings = append(warnings, fmt.Sprintf("Untracked project found in local directory: %s", projectPath))
+			}
 		}
 	}
 

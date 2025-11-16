@@ -86,27 +86,52 @@ func StatusCmd() error {
 	return nil
 }
 
-// determineStatus determines the sync status of a project
-func determineStatus(project *core.Project, lastModified time.Time) string {
+// StatusInfo contains the emoji and text components of a status
+type StatusInfo struct {
+	Emoji string
+	Text  string
+}
+
+// String returns the full status string with emoji
+func (s StatusInfo) String() string {
+	return s.Emoji + " " + s.Text
+}
+
+// determineStatusInfo determines the sync status of a project and returns separate components
+func determineStatusInfo(project *core.Project, lastModified time.Time) StatusInfo {
 	// Never checked in
 	if project.LastParkAt == nil {
-		return "✗ Never checked in"
+		return StatusInfo{Emoji: "✗", Text: "Never checked in"}
 	}
 
 	// Check if modified after last park
 	if project.LastParkMtime != nil {
 		if lastModified.After(*project.LastParkMtime) {
-			return "⚠ Has uncommitted work"
+			return StatusInfo{Emoji: "⚠", Text: "Has uncommitted work"}
 		}
 	} else {
 		// Fallback to comparing with LastParkAt
 		if lastModified.After(*project.LastParkAt) {
-			return "⚠ Has uncommitted work"
+			return StatusInfo{Emoji: "⚠", Text: "Has uncommitted work"}
 		}
 	}
 
-	return "✓ Safe to delete"
+	return StatusInfo{Emoji: "✓", Text: "Safe to delete"}
 }
+
+// determineStatus determines the sync status of a project (backward compatible)
+func determineStatus(project *core.Project, lastModified time.Time) string {
+	return determineStatusInfo(project, lastModified).String()
+}
+
+// Time duration constants for formatTimeAgo
+const (
+	hoursPerDay   = 24
+	daysPerWeek   = 7
+	daysPerMonth  = 30 // Approximate average
+	hoursPerWeek  = hoursPerDay * daysPerWeek
+	hoursPerMonth = hoursPerDay * daysPerMonth
+)
 
 // formatTimeAgo formats a time as a human-readable relative string
 func formatTimeAgo(t time.Time) string {
@@ -126,29 +151,29 @@ func formatTimeAgo(t time.Time) string {
 		}
 		return fmt.Sprintf("%d mins ago", mins)
 	}
-	if duration < 24*time.Hour {
+	if duration < hoursPerDay*time.Hour {
 		hours := int(duration.Hours())
 		if hours == 1 {
 			return "1 hour ago"
 		}
 		return fmt.Sprintf("%d hours ago", hours)
 	}
-	if duration < 7*24*time.Hour {
-		days := int(duration.Hours() / 24)
+	if duration < hoursPerWeek*time.Hour {
+		days := int(duration.Hours() / hoursPerDay)
 		if days == 1 {
 			return "1 day ago"
 		}
 		return fmt.Sprintf("%d days ago", days)
 	}
-	if duration < 30*24*time.Hour {
-		weeks := int(duration.Hours() / (24 * 7))
+	if duration < hoursPerMonth*time.Hour {
+		weeks := int(duration.Hours() / hoursPerWeek)
 		if weeks == 1 {
 			return "1 week ago"
 		}
 		return fmt.Sprintf("%d weeks ago", weeks)
 	}
 
-	months := int(duration.Hours() / (24 * 30))
+	months := int(duration.Hours() / hoursPerMonth)
 	if months == 1 {
 		return "1 month ago"
 	}

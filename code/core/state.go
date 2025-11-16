@@ -25,9 +25,10 @@ type Project struct {
 
 // State represents the entire parkr state file
 type State struct {
-	Masters       map[string]map[string]string `json:"masters"`
-	DefaultMaster string                       `json:"default_master"`
-	Projects      map[string]*Project          `json:"projects"`
+	Masters          map[string]map[string]string `json:"masters"`
+	DefaultMaster    string                       `json:"default_master"`
+	Projects         map[string]*Project          `json:"projects"`
+	LocalDirectories []string                     `json:"local_directories,omitempty"`
 }
 
 // StateManager handles reading and writing state

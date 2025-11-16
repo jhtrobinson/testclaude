@@ -109,19 +109,8 @@ func InfoCmd(projectName string) error {
 
 	// Status
 	if project.IsGrabbed && localExists {
-		status := determineStatus(project, lastModified)
-		// Remove the emoji prefix for cleaner output
-		statusText := status
-		if len(status) > 2 {
-			// Skip emoji and space
-			for i, r := range status {
-				if r == ' ' && i > 0 {
-					statusText = status[i+1:]
-					break
-				}
-			}
-		}
-		fmt.Printf("Status: %s\n", statusText)
+		statusInfo := determineStatusInfo(project, lastModified)
+		fmt.Printf("Status: %s\n", statusInfo.Text)
 	} else if !project.IsGrabbed {
 		fmt.Printf("Status: Archived\n")
 	} else {
