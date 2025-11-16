@@ -97,6 +97,35 @@ func main() {
 
 		err = cli.RmCmd(projectName, noHash, force)
 
+	case "status":
+		err = cli.StatusCmd()
+
+	case "info":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Error: project name required")
+			fmt.Fprintln(os.Stderr, "Usage: parkr info <project>")
+			os.Exit(2)
+		}
+		err = cli.InfoCmd(os.Args[2])
+
+	case "local":
+		unmanagedOnly := false
+		for i := 2; i < len(os.Args); i++ {
+			if os.Args[i] == "--unmanaged" {
+				unmanagedOnly = true
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: unknown option '%s'\n", os.Args[i])
+				os.Exit(2)
+			}
+		}
+		err = cli.LocalCmd(unmanagedOnly)
+
+	case "verify":
+		err = cli.VerifyCmd()
+
+	case "config":
+		err = cli.ConfigCmd()
+
 	case "help", "--help", "-h":
 		printUsage()
 
@@ -126,5 +155,14 @@ func printUsage() {
 	fmt.Println("                    Options: --no-hash")
 	fmt.Println("  rm <project>      Remove local copy (keeps archive)")
 	fmt.Println("                    Options: --no-hash, --force")
+	fmt.Println()
+	fmt.Println("Status and Information:")
+	fmt.Println("  status            Show all grabbed projects with sync status")
+	fmt.Println("  info <project>    Show detailed project information")
+	fmt.Println("  local             Show all local projects")
+	fmt.Println("                    Options: --unmanaged")
+	fmt.Println("  verify            Check state file consistency")
+	fmt.Println("  config            Show current configuration")
+	fmt.Println()
 	fmt.Println("  help              Show this help message")
 }
