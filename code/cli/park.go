@@ -40,6 +40,16 @@ func ParkCmd(projectName string, noHash bool) error {
 
 	fmt.Printf("Parking %s from %s to %s...\n", projectName, project.LocalPath, archivePath)
 
+	// Compute local hash before sync (if not in no-hash mode)
+	var localHashBefore string
+	if !noHash {
+		fmt.Println("Computing local content hash...")
+		localHashBefore, err = core.ComputeProjectHash(project.LocalPath)
+		if err != nil {
+			return fmt.Errorf("failed to compute local hash: %w", err)
+		}
+	}
+
 	// Rsync from local to archive
 	if err := core.Rsync(project.LocalPath, archivePath); err != nil {
 		return fmt.Errorf("failed to sync project: %w", err)
@@ -54,41 +64,40 @@ func ParkCmd(projectName string, noHash bool) error {
 	// Update state
 	now := time.Now()
 	project.LastParkAt = &now
+	project.NoHashMode = noHash
 
 	if newestInfo != nil && *newestInfo != nil {
 		mtime := (*newestInfo).ModTime()
 		project.LastParkMtime = &mtime
 	}
 
-	if noHash {
-		// No hash mode - only track mtime
-		project.NoHashMode = true
-		fmt.Println("Skipping hash computation (--no-hash)")
-	} else {
-		// Compute hashes for both local and archive
-		fmt.Println("Computing project hash...")
-
-		localHash, err := core.ComputeProjectHash(project.LocalPath)
-		if err != nil {
-			return fmt.Errorf("failed to compute local hash: %w", err)
-		}
-
+	// Compute and verify hashes if not in no-hash mode
+	if !noHash {
+		fmt.Println("Verifying archive content hash...")
 		archiveHash, err := core.ComputeProjectHash(archivePath)
 		if err != nil {
 			return fmt.Errorf("failed to compute archive hash: %w", err)
 		}
 
-		// After successful rsync, both should match
-		if localHash != archiveHash {
-			return fmt.Errorf("hash mismatch after sync - this should not happen")
+		if localHashBefore != archiveHash {
+			return fmt.Errorf("hash mismatch after sync:\n"+
+				"  Local hash:   %s\n"+
+				"  Archive hash: %s\n"+
+				"Possible causes:\n"+
+				"  - Files were modified during rsync operation\n"+
+				"  - Rsync failed to copy some files (check permissions)\n"+
+				"  - Disk I/O errors occurred during sync\n"+
+				"  - Symlinks or special files handled differently",
+				localHashBefore, archiveHash)
 		}
 
-		project.LocalContentHash = &localHash
+		// Store hashes
+		project.LocalContentHash = &localHashBefore
 		project.ArchiveContentHash = &archiveHash
-		project.LocalHashComputedAt = &now
-		project.NoHashMode = false
+		hashTime := time.Now()
+		project.LocalHashComputedAt = &hashTime
 
-		fmt.Printf("Hash computed: %s\n", localHash[:16]+"...")
+		fmt.Println("Hash verification passed.")
 	}
 
 	if err := sm.Save(state); err != nil {

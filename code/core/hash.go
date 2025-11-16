@@ -10,70 +10,94 @@ import (
 	"sort"
 )
 
-// ComputeProjectHash calculates SHA256 hash for a project directory
-// It walks the directory in sorted order for consistency:
-// For each file: hash = sha256(relative_path + file_content)
-// Project hash = sha256(concatenate all file_hashes)
+// ComputeProjectHash computes a SHA256 hash of all files in a project directory.
+// Files are sorted by relative path for deterministic results.
+// Symlinks are skipped (not followed) to avoid security issues and infinite loops.
+// Non-regular files (devices, sockets, pipes) are skipped.
 func ComputeProjectHash(projectPath string) (string, error) {
-	var fileHashes [][]byte
+	var fileHashes []fileHashEntry
+	var fileCount int
 
-	// Collect all files first
-	var files []string
-	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(projectPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("error accessing %s: %w", path, err)
 		}
-		if !info.IsDir() {
-			relPath, err := filepath.Rel(projectPath, path)
-			if err != nil {
-				return err
-			}
-			files = append(files, relPath)
+
+		// Skip symlinks entirely to avoid security issues and infinite loops
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
 		}
+
+		// Skip non-regular files (directories, devices, sockets, pipes)
+		if !d.Type().IsRegular() {
+			return nil
+		}
+
+		// Get relative path for consistent hashing across machines
+		relPath, err := filepath.Rel(projectPath, path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
+		}
+
+		// Compute hash of this file
+		hash, err := hashFile(path)
+		if err != nil {
+			return fmt.Errorf("failed to hash file %s: %w", relPath, err)
+		}
+
+		fileHashes = append(fileHashes, fileHashEntry{
+			path: relPath,
+			hash: hash,
+		})
+		fileCount++
+
 		return nil
 	})
+
 	if err != nil {
-		return "", fmt.Errorf("failed to walk directory: %w", err)
+		return "", err
 	}
 
-	// Sort files for consistent ordering
-	sort.Strings(files)
-
-	// Compute hash for each file
-	for _, relPath := range files {
-		fullPath := filepath.Join(projectPath, relPath)
-		fileHash, err := computeFileHash(relPath, fullPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to hash file %s: %w", relPath, err)
-		}
-		fileHashes = append(fileHashes, fileHash)
+	// Error on empty directories to prevent masking data loss
+	if fileCount == 0 {
+		return "", fmt.Errorf("project directory is empty or contains no regular files: %s", projectPath)
 	}
 
-	// Compute project hash from all file hashes
+	// Sort by path for deterministic results
+	sort.Slice(fileHashes, func(i, j int) bool {
+		return fileHashes[i].path < fileHashes[j].path
+	})
+
+	// Combine all file hashes into project hash
 	projectHasher := sha256.New()
 	for _, fh := range fileHashes {
-		projectHasher.Write(fh)
+		// Include path in hash to detect renames
+		projectHasher.Write([]byte(fh.path))
+		projectHasher.Write([]byte{0}) // null separator
+		projectHasher.Write(fh.hash)
 	}
 
 	return hex.EncodeToString(projectHasher.Sum(nil)), nil
 }
 
-// computeFileHash computes sha256(relative_path + file_content)
-func computeFileHash(relPath string, fullPath string) ([]byte, error) {
-	file, err := os.Open(fullPath)
+type fileHashEntry struct {
+	path string
+	hash []byte
+}
+
+// hashFile computes the SHA256 hash of a single file
+func hashFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer f.Close()
 
-	hasher := sha256.New()
-	// Write relative path first
-	hasher.Write([]byte(relPath))
-
-	// Then write file content
-	if _, err := io.Copy(hasher, file); err != nil {
+	h := sha256.New()
+	// io.Copy is memory-efficient for large files
+	if _, err := io.Copy(h, f); err != nil {
 		return nil, err
 	}
 
-	return hasher.Sum(nil), nil
+	return h.Sum(nil), nil
 }

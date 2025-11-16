@@ -41,14 +41,61 @@ func RmCmd(projectName string, noHash bool, force bool) error {
 
 		if noHash || project.NoHashMode {
 			// Mtime verification
-			if err := verifyByMtime(project, projectName); err != nil {
-				return err
+			if project.LastParkMtime == nil {
+				return fmt.Errorf("project '%s' has never been parked - cannot verify safety", projectName)
 			}
+
+			newestInfo, err := core.GetNewestMtime(project.LocalPath)
+			if err != nil {
+				return fmt.Errorf("failed to check local files: %w", err)
+			}
+
+			if newestInfo != nil && *newestInfo != nil {
+				currentMtime := (*newestInfo).ModTime()
+				if currentMtime.After(*project.LastParkMtime) {
+					return fmt.Errorf("project '%s' has been modified since last park (newest: %s, parked: %s). Park first or use --force",
+						projectName, currentMtime.Format("2006-01-02 15:04:05"), project.LastParkMtime.Format("2006-01-02 15:04:05"))
+				}
+			}
+
+			fmt.Println("Mtime verification passed.")
 		} else {
-			// Hash verification (default for projects with hashes)
-			if err := verifyByHash(project, projectName); err != nil {
-				return err
+			// Hash verification
+			if project.LocalContentHash == nil {
+				return fmt.Errorf("project '%s' has no stored hash - park with hashing first or use --no-hash", projectName)
 			}
+
+			// Check if files were modified since hash was computed
+			if project.LocalHashComputedAt != nil {
+				newestInfo, err := core.GetNewestMtime(project.LocalPath)
+				if err != nil {
+					return fmt.Errorf("failed to check local files: %w", err)
+				}
+				if newestInfo != nil && *newestInfo != nil {
+					currentMtime := (*newestInfo).ModTime()
+					if currentMtime.After(*project.LocalHashComputedAt) {
+						fmt.Printf("Warning: files modified since hash was computed (newest: %s, hash computed: %s)\n",
+							currentMtime.Format("2006-01-02 15:04:05"), project.LocalHashComputedAt.Format("2006-01-02 15:04:05"))
+						fmt.Println("Recomputing hash to verify...")
+					}
+				}
+			}
+
+			fmt.Println("Computing current local hash...")
+			currentHash, err := core.ComputeProjectHash(project.LocalPath)
+			if err != nil {
+				return fmt.Errorf("failed to compute local hash: %w", err)
+			}
+
+			if currentHash != *project.LocalContentHash {
+				return fmt.Errorf("hash mismatch - local content has changed since last park:\n"+
+					"  Stored hash:  %s\n"+
+					"  Current hash: %s\n"+
+					"Park your changes first or use --force to delete anyway",
+					*project.LocalContentHash, currentHash)
+			}
+
+			fmt.Println("Hash verification passed.")
 		}
 	} else {
 		fmt.Println("Warning: Skipping verification (--force)")
@@ -74,69 +121,5 @@ func RmCmd(projectName string, noHash bool, force bool) error {
 	}
 
 	fmt.Printf("Successfully removed local copy of '%s'\n", projectName)
-	return nil
-}
-
-// verifyByMtime checks if project has been modified using mtime comparison
-func verifyByMtime(project *core.Project, projectName string) error {
-	if project.LastParkMtime == nil {
-		return fmt.Errorf("project '%s' has never been parked - cannot verify safety", projectName)
-	}
-
-	newestInfo, err := core.GetNewestMtime(project.LocalPath)
-	if err != nil {
-		return fmt.Errorf("failed to check local files: %w", err)
-	}
-
-	if newestInfo != nil && *newestInfo != nil {
-		currentMtime := (*newestInfo).ModTime()
-		if currentMtime.After(*project.LastParkMtime) {
-			return fmt.Errorf("project '%s' has been modified since last park (newest: %s, parked: %s). Park first or use --force",
-				projectName, currentMtime.Format("2006-01-02 15:04:05"), project.LastParkMtime.Format("2006-01-02 15:04:05"))
-		}
-	}
-
-	fmt.Println("Mtime verification passed.")
-	return nil
-}
-
-// verifyByHash checks if project matches archive using SHA256 hash comparison
-func verifyByHash(project *core.Project, projectName string) error {
-	if project.NoHashMode {
-		return fmt.Errorf("project '%s' is in no-hash mode - cannot use hash verification", projectName)
-	}
-
-	if project.ArchiveContentHash == nil || project.LocalHashComputedAt == nil {
-		return fmt.Errorf("project '%s' does not have stored hashes - use --no-hash or park without --no-hash first", projectName)
-	}
-
-	// Dirty detection: quick check using mtime vs hash computed time
-	fmt.Println("Checking for modifications...")
-	newestInfo, err := core.GetNewestMtime(project.LocalPath)
-	if err != nil {
-		return fmt.Errorf("failed to check local files: %w", err)
-	}
-
-	if newestInfo != nil && *newestInfo != nil {
-		currentMtime := (*newestInfo).ModTime()
-		if currentMtime.After(*project.LocalHashComputedAt) {
-			return fmt.Errorf("project '%s' has been modified since hash was computed (newest: %s, hash computed: %s). Park first or use --force",
-				projectName, currentMtime.Format("2006-01-02 15:04:05"), project.LocalHashComputedAt.Format("2006-01-02 15:04:05"))
-		}
-	}
-
-	// Compute current local hash and compare to archive hash
-	fmt.Println("Computing local hash for verification...")
-	currentHash, err := core.ComputeProjectHash(project.LocalPath)
-	if err != nil {
-		return fmt.Errorf("failed to compute local hash: %w", err)
-	}
-
-	if currentHash != *project.ArchiveContentHash {
-		return fmt.Errorf("project '%s' hash does not match archive (local: %s, archive: %s). Park first or use --force",
-			projectName, currentHash[:16]+"...", (*project.ArchiveContentHash)[:16]+"...")
-	}
-
-	fmt.Println("Hash verification passed.")
 	return nil
 }
