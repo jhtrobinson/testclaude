@@ -69,6 +69,8 @@ main
 Integration branch manager:
 - Creates `phase-memo.txt` in project root to track all branch information persistently
 - Identifies features to implement from the requirements
+- **Creates all feature branches** from the integration branch (e.g., `feature/phase-N-feature-A`)
+- **Pushes feature branches to origin** so implementation agents can access them
 - Creates todo list tracking each feature's progress
 - Documents branch structure and feature assignments
 - Updates phase-memo.txt with each new branch ID as agents are assigned
@@ -77,7 +79,7 @@ Integration branch manager:
 For each feature:
 1. **Programmer provides implementation prompt** to an agent
 2. **Implementation agent**:
-   - Creates branch from integration branch
+   - Creates branch from the feature branch (NOT directly from integration branch)
    - Reads spec (docs/parkr.spec.md) and test cases (docs/TEST-phase-N.md)
    - Implements the feature
    - Tests the implementation
