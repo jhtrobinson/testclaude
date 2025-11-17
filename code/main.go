@@ -67,6 +67,36 @@ func main() {
 
 		err = cli.RmCmd(projectName, noHash, force)
 
+	case "remove":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Error: project name required")
+			fmt.Fprintln(os.Stderr, "Usage: parkr remove <project> [--archive] [--local] [--everywhere] [--confirm]")
+			os.Exit(2)
+		}
+		projectName := os.Args[2]
+		archiveOnly := false
+		localOnly := false
+		everywhere := false
+		confirm := false
+
+		for i := 3; i < len(os.Args); i++ {
+			switch os.Args[i] {
+			case "--archive":
+				archiveOnly = true
+			case "--local":
+				localOnly = true
+			case "--everywhere":
+				everywhere = true
+			case "--confirm":
+				confirm = true
+			default:
+				fmt.Fprintf(os.Stderr, "Error: unknown option '%s'\n", os.Args[i])
+				os.Exit(2)
+			}
+		}
+
+		err = cli.RemoveCmd(projectName, archiveOnly, localOnly, everywhere, confirm)
+
 	case "help", "--help", "-h":
 		printUsage()
 
@@ -94,5 +124,7 @@ func printUsage() {
 	fmt.Println("  park <project>    Sync local changes back to archive")
 	fmt.Println("  rm <project>      Remove local copy (keeps archive)")
 	fmt.Println("                    Options: --no-hash, --force")
+	fmt.Println("  remove <project>  Remove project from archive")
+	fmt.Println("                    Options: --archive, --local, --everywhere, --confirm")
 	fmt.Println("  help              Show this help message")
 }
