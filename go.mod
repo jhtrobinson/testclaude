@@ -1,3 +1,3 @@
-module testclaude
+module github.com/jamespark/parkr
 
-go 1.24.7
+go 1.23.1

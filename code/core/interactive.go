@@ -57,7 +57,9 @@ type termios struct {
 // getTermios gets the current terminal settings
 func getTermios(fd int) (*termios, error) {
 	var t termios
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), syscall.TCGETS, uintptr(unsafe.Pointer(&t)))
+	// Use TIOCGETA on macOS (Darwin), TCGETS on Linux
+	const TIOCGETA = 0x40487413 // macOS
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), TIOCGETA, uintptr(unsafe.Pointer(&t)))
 	if err != 0 {
 		return nil, err
 	}
@@ -66,7 +68,9 @@ func getTermios(fd int) (*termios, error) {
 
 // setTermios sets the terminal settings
 func setTermios(fd int, t *termios) error {
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), syscall.TCSETS, uintptr(unsafe.Pointer(t)))
+	// Use TIOCSETA on macOS (Darwin), TCSETS on Linux
+	const TIOCSETA = 0x80487414 // macOS
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), TIOCSETA, uintptr(unsafe.Pointer(t)))
 	if err != 0 {
 		return err
 	}

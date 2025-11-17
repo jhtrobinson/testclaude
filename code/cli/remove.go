@@ -222,18 +222,20 @@ func RemoveCmd(projectName string, localOnly bool, archive bool, yes bool) error
 		fmt.Println("State updated.")
 	}
 
-	// Remove archive copy (--archive removes state + archive, preserves local)
-	fmt.Printf("Removing archive at %s...\n", archivePath)
-	if err := os.RemoveAll(archivePath); err != nil {
-		// Rollback state on failure
-		if existsInState {
-			state.Projects[projectName] = project
-			state.Projects[projectName].IsGrabbed = originalIsGrabbed
-			_ = sm.Save(state)
+	// Only remove archive copy if --archive flag is specified
+	if archive {
+		fmt.Printf("Removing archive at %s...\n", archivePath)
+		if err := os.RemoveAll(archivePath); err != nil {
+			// Rollback state on failure
+			if existsInState {
+				state.Projects[projectName] = project
+				state.Projects[projectName].IsGrabbed = originalIsGrabbed
+				_ = sm.Save(state)
+			}
+			return fmt.Errorf("failed to remove archive: %w", err)
 		}
-		return fmt.Errorf("failed to remove archive: %w", err)
+		fmt.Println("Archive copy removed.")
 	}
-	fmt.Println("Archive copy removed.")
 
 	fmt.Printf("\nSuccessfully removed project '%s'\n", projectName)
 	return nil
