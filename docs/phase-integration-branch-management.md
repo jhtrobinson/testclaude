@@ -144,21 +144,26 @@ For each feature:
 ### 8. Pre-Merge Branch Creation
 1. **Integration branch manager creates pre-merge branch**
    - Creates `phase-N-integration-premerge` branch from `phase-N-integration`
+   - **Pushes branch to origin immediately** so merge agent can access it
    - This branch receives all merged features for testing
    - Named clearly to distinguish from agent branches
    - Provides clean staging area for validation
 
 ### 9. Integration Branch Merge Phase
 For each feature:
-1. **Programmer prompts merge agent**
-2. **Merge agent**:
+1. **Integration branch manager writes merge prompt**
+2. **Programmer prompts merge agent**
+3. **Integration branch manager records merge agent branch ID** in phase-memo.txt
+4. **Merge agent**:
    - Creates TODO list to track progress
    - Processes one feature at a time
-   - Merges feature branch into pre-merge branch (`phase-N-integration-premerge`)
+   - **Squash merges** feature branch into pre-merge branch (`phase-N-integration-premerge`)
+     - Use `git merge --squash` to combine all feature commits into a single commit
+     - This keeps the integration branch history clean
    - If conflicts occur: reads spec for conflicting features, resolves ensuring both work
    - If resolution not straightforward: stops and reports to programmer
    - Reports status and waits for programmer before next feature
-3. **Repeat** until all features merged
+5. **Repeat** until all features merged
 
 ### 10. Pre-Merge Validation
 **Programmer responsibility** - must be done by the programmer, not agents:
@@ -166,6 +171,14 @@ For each feature:
 - Run all phase test cases (preferably in isolated environment)
 - Fix any integration issues
 - Final review before merging to main
+
+### 11. Final Integration Branch Update
+**Integration branch manager responsibility**:
+1. Merge the pre-merge branch back into the integration branch
+   - This preserves all work done on the integration branch (docs updates, tracking changes, etc.)
+   - `git checkout phase-N-integration && git merge phase-N-integration-premerge`
+2. Push the updated integration branch to origin
+3. The integration branch now contains all features plus any integration work
 
 ## Branch Tracking
 
